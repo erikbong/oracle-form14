@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  oracle-forms:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: oracle-forms-14c:latest
+    container_name: oracle-forms-14c
+    hostname: oracle-forms
+
+    ports:
+      - "7001:7001"   # WebLogic Admin Server
+      - "9001:9001"   # Forms Server
+      - "9002:9002"   # Reports Server
+      - "5556:5556"   # Additional WebLogic port
+      - "5557:5557"   # Additional WebLogic port
+
+    environment:
+      # Oracle environment variables
+      - ORACLE_HOME=/u01/app/oracle/product/fmw14.1.2.0
+      - DOMAIN_HOME=/u01/app/oracle/config/domains/forms_domain
+      - JAVA_HOME=/u01/app/oracle/product/jdk17
+      - ADMIN_PORT=7001
+      - FORMS_PORT=9001
+      - REPORTS_PORT=9002
+
+      # WebLogic admin credentials (change these in production)
+      - ADMIN_USERNAME=weblogic
+      - ADMIN_PASSWORD=Oracle123
+
+      # JVM settings
+      - JAVA_OPTIONS=-Xmx2048m -Xms1024m
+
+    volumes:
+      # Persist WebLogic domain data
+      - ./oracle_domain_data:/u01/app/oracle/config/domains
+      # Persist logs
+      - ./oracle_logs:/u01/app/oracle/product/fmw14.1.2.0/logs
+      # Optional: Mount local forms/reports applications
+      # - ./applications:/u01/app/oracle/config/domains/forms_domain/autodeploy
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7001/console", "||", "exit", "1"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 300s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # Optional: Add a reverse proxy for better external access
+  nginx:
+    image: nginx:alpine
+    container_name: oracle-forms-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./ssl:/etc/nginx/ssl:ro  # Uncomment for SSL certificates
+    depends_on:
+      - oracle-forms
+    restart: unless-stopped
+    profiles:
+      - proxy  # Use 'docker-compose --profile proxy up' to include this service
+
+volumes:
+  oracle_domain_data:
+    driver: local
+  oracle_logs:
+    driver: local
+
+networks:
+  default:
+    name: oracle-forms-network
+    driver: bridge

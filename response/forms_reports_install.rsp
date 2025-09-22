@@ -1,0 +1,8 @@
+[ENGINE]
+Response File Version=1.0.0.0.0
+
+[GENERIC]
+ORACLE_HOME=/u01/app/oracle/product/fmw14.1.2.0
+INSTALL_TYPE=Forms and Reports
+SKIP_SOFTWARE_UPDATES=true
+DECLINE_SECURITY_UPDATES=true
