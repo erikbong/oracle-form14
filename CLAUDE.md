@@ -2,9 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**For general users and deployment information, see [README.md](README.md)**
+
 ## Overview
 
 This is a Docker-based Oracle Forms & Reports 14c deployment project. The repository contains everything needed to build and run Oracle Forms and Reports 14c in a containerized environment using Oracle Linux 8.
+
+**Repository**: https://github.com/erikbong/oracle-form14.git
+
+## Documentation Structure
+
+- **[README.md](README.md)**: Complete user guide with quick start, deployment options, troubleshooting
+- **[CLAUDE.md](CLAUDE.md)**: This file - Technical guidance for Claude Code development
+- **[.env.example](.env.example)**: Environment configuration template
+- **[docker-compose.yml](docker-compose.yml)**: Complete deployment configuration
+- **[nginx.conf](nginx.conf)**: Reverse proxy configuration
 
 ## Architecture
 
