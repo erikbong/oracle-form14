@@ -26,7 +26,10 @@ cd oracle-form14
 # Place Oracle installation files in install/ directory
 # (see Installation Files section below)
 
-# Build and start the services
+# STEP 1: Initialize host directories (REQUIRED for fresh installations)
+docker-compose --profile init up oracle-forms-init
+
+# STEP 2: Build and start the main services
 docker-compose up -d
 
 # With nginx reverse proxy (optional)
@@ -35,11 +38,13 @@ docker-compose --profile proxy up -d
 
 ### Access the Services
 
-- **WebLogic Console**: http://localhost:7001/console
+- **WebLogic Console**: http://localhost:7001/console *(Welcome page - see [Console Guide](WEBLOGIC_CONSOLE_GUIDE.md))*
 - **Forms Service**: http://localhost:9001
 - **Reports Service**: http://localhost:9002
 
 **Default Credentials**: `weblogic` / `Oracle123`
+
+> **📋 Console Access**: WebLogic 14.1.2 uses the WebLogic Remote Console (desktop app). See [WEBLOGIC_CONSOLE_GUIDE.md](WEBLOGIC_CONSOLE_GUIDE.md) for complete setup instructions.
 
 ## 📋 Table of Contents
 

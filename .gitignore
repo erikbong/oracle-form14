@@ -1,3 +1,5 @@
 install/fmw_14.1.2.0.0_fr_linux64.bin
 install/fmw_14.1.2.0.0_infrastructure.jar
 install/jdk-17.0.12_linux-x64_bin.tar.gz
+oracle_domain_data/
+oracle_logs/

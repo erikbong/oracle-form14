@@ -1,6 +1,59 @@
 version: '3.8'
 
 services:
+  # Init container to populate host directories
+  oracle-forms-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: oracle-forms-14c:latest
+    container_name: oracle-forms-init
+    command: >
+      bash -c "
+        echo '🔧 Initializing host directories with Oracle configuration files...'
+
+        # Copy TNS Admin files
+        echo '📋 Copying TNS configuration...'
+        cp -r /u01/app/oracle/product/fmw14.1.2.0/network/admin/. /host_volumes/tns_admin/ 2>/dev/null || true
+
+        # Copy Reports config files
+        echo '📊 Copying Reports configuration...'
+        cp -r /u01/app/oracle/product/fmw14.1.2.0/reports/conf/. /host_volumes/reports_config/ 2>/dev/null || true
+
+        # Copy domain if not exists
+        echo '🏗️ Checking domain configuration...'
+        if [ ! -d '/host_volumes/oracle_domain_data/forms_domain' ]; then
+          echo 'Creating initial domain structure...'
+          mkdir -p /host_volumes/oracle_domain_data
+        fi
+
+        # Create directory structure
+        echo '📁 Creating directory structure...'
+        mkdir -p /host_volumes/forms_source
+        mkdir -p /host_volumes/reports_source
+        mkdir -p /host_volumes/applications/forms
+        mkdir -p /host_volumes/applications/reports
+        mkdir -p /host_volumes/applications/resources
+        mkdir -p /host_volumes/oracle_logs
+
+        # Set permissions
+        echo '🔐 Setting permissions...'
+        chmod -R 755 /host_volumes/tns_admin 2>/dev/null || true
+        chmod -R 755 /host_volumes/reports_config 2>/dev/null || true
+
+        echo '✅ Host directories initialized successfully!'
+      "
+    volumes:
+      - ./tns_admin:/host_volumes/tns_admin
+      - ./reports_config:/host_volumes/reports_config
+      - ./oracle_domain_data:/host_volumes/oracle_domain_data
+      - ./forms_source:/host_volumes/forms_source
+      - ./reports_source:/host_volumes/reports_source
+      - ./applications:/host_volumes/applications
+      - ./oracle_logs:/host_volumes/oracle_logs
+    profiles:
+      - init
+
   oracle-forms:
     build:
       context: .
@@ -10,7 +63,7 @@ services:
     hostname: oracle-forms
 
     ports:
-      - "7001:7001"   # WebLogic Admin Server
+      - "7001:7001"   # WebLogic Admin Server & Hosted Console
       - "9001:9001"   # Forms Server
       - "9002:9002"   # Reports Server
       - "5556:5556"   # Additional WebLogic port
@@ -37,8 +90,16 @@ services:
       - ./oracle_domain_data:/u01/app/oracle/config/domains
       # Persist logs
       - ./oracle_logs:/u01/app/oracle/product/fmw14.1.2.0/logs
-      # Optional: Mount local forms/reports applications
-      # - ./applications:/u01/app/oracle/config/domains/forms_domain/autodeploy
+      # TNS Admin for database connections (tnsnames.ora, etc.)
+      - ./tns_admin:/u01/app/oracle/product/fmw14.1.2.0/network/admin
+      # Mount Forms source files for compilation
+      - ./forms_source:/u01/app/oracle/forms_source
+      # Mount Reports configuration and templates
+      - ./reports_config:/u01/app/oracle/product/fmw14.1.2.0/reports/conf
+      # Mount Reports source files (.rdf)
+      - ./reports_source:/u01/app/oracle/reports_source
+      # Mount compiled applications for deployment
+      - ./applications:/u01/app/oracle/config/domains/forms_domain/autodeploy
 
     restart: unless-stopped
 

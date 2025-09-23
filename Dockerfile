@@ -103,26 +103,101 @@ RUN echo "=== STARTING FMW INFRASTRUCTURE INSTALLATION ===" && \
         exit 1; \
     fi
 
-# DEBUG: Force show logs even if commands fail
-RUN echo "=== ORACLE_HOME CONTENT ===" && \
-    ls -la $ORACLE_HOME || echo "ORACLE_HOME ls failed" && \
-    echo "=== TMP CONTENT ===" && \
-    ls -la /tmp/ || echo "tmp ls failed" && \
-    echo "=== ORAINST.LOG ===" && \
-    cat /tmp/oraInst.log 2>/dev/null || echo "oraInst.log not found" && \
-    echo "=== LATEST INSTALL LOG ===" && \
-    LOG_FILE=$(find /tmp -name "install*.log" | head -1) && \
-    if [ -n "$LOG_FILE" ]; then cat "$LOG_FILE"; else echo "No install.log found"; fi && \
-    echo "=== JAVA VERSION ===" && \
-    java -version 2>&1
+# Continue as oracle user for Forms installation
 
-# DEBUG: Check for wlst.sh
-RUN find $ORACLE_HOME -name "wlst.sh" 2>/dev/null || echo "wlst.sh NOT FOUND in ORACLE_HOME"
-# DEBUG: Check for wlst.sh
-RUN find $ORACLE_HOME -name "wlst.sh" 2>/dev/null || echo "wlst.sh NOT FOUND in ORACLE_HOME"
+# Install Oracle Forms & Reports 14c using the installer help first
+RUN echo "=== CHECKING FORMS INSTALLER HELP ===" && \
+    /install/fmw_14.1.2.0.0_fr_linux64.bin -help 2>&1 | head -50 || echo "Help not available"
 
-# Switch back to root for domain creation
+# Try Oracle's recommended approach - no response file first
+RUN echo "=== STARTING FORMS & REPORTS INSTALLATION ===" && \
+    echo "Verifying Forms installer exists:" && \
+    ls -la /install/fmw_14.1.2.0.0_fr_linux64.bin && \
+    echo "" && \
+    echo "=== ATTEMPT 1: Oracle Default Installation ===" && \
+    echo "Using Oracle Home parameter only..." && \
+    /install/fmw_14.1.2.0.0_fr_linux64.bin \
+        -silent \
+        -oh $ORACLE_HOME \
+        -invPtrLoc /etc/oraInst.loc \
+        -ignoreSysPrereqs \
+        -jreLoc $JAVA_HOME \
+        -force; \
+    ATTEMPT1_EXIT=$? && \
+    echo "ATTEMPT 1 EXIT CODE: $ATTEMPT1_EXIT" && \
+    if [ $ATTEMPT1_EXIT -eq 0 ]; then \
+        echo "✅ Oracle default installation succeeded"; \
+    else \
+        echo "❌ Oracle default failed, trying with complete response file"; \
+        echo "" && \
+        echo "=== ATTEMPT 2: Complete Forms Installation ===" && \
+        echo "Response file content:" && \
+        cat /response/forms_reports_complete.rsp && \
+        /install/fmw_14.1.2.0.0_fr_linux64.bin \
+            -silent \
+            -responseFile /response/forms_reports_complete.rsp \
+            -invPtrLoc /etc/oraInst.loc \
+            -jreLoc $JAVA_HOME \
+            -ignoreSysPrereqs \
+            -force; \
+        ATTEMPT2_EXIT=$? && \
+        echo "ATTEMPT 2 EXIT CODE: $ATTEMPT2_EXIT" && \
+        if [ $ATTEMPT2_EXIT -eq 0 ]; then \
+            echo "✅ Complete Forms installation succeeded"; \
+        else \
+            echo "❌ Complete installation failed, trying SOFTWARE_ONLY"; \
+            echo "" && \
+            echo "=== ATTEMPT 3: SOFTWARE_ONLY Installation ===" && \
+            cat /response/forms_reports_software_only.rsp && \
+            /install/fmw_14.1.2.0.0_fr_linux64.bin \
+                -silent \
+                -responseFile /response/forms_reports_software_only.rsp \
+                -invPtrLoc /etc/oraInst.loc \
+                -jreLoc $JAVA_HOME \
+                -ignoreSysPrereqs \
+                -force; \
+            ATTEMPT3_EXIT=$? && \
+            echo "ATTEMPT 3 EXIT CODE: $ATTEMPT3_EXIT" && \
+            if [ $ATTEMPT3_EXIT -eq 0 ]; then \
+                echo "✅ SOFTWARE_ONLY installation succeeded"; \
+            else \
+                echo "❌ SOFTWARE_ONLY failed, trying COMPLETE"; \
+                echo "" && \
+                echo "=== ATTEMPT 4: COMPLETE Installation ===" && \
+                cat /response/forms_reports_basic.rsp && \
+                /install/fmw_14.1.2.0.0_fr_linux64.bin \
+                    -silent \
+                    -responseFile /response/forms_reports_basic.rsp \
+                    -invPtrLoc /etc/oraInst.loc \
+                    -jreLoc $JAVA_HOME \
+                    -ignoreSysPrereqs \
+                    -force; \
+                ATTEMPT4_EXIT=$? && \
+                echo "ATTEMPT 4 EXIT CODE: $ATTEMPT4_EXIT" && \
+                if [ $ATTEMPT4_EXIT -eq 0 ]; then \
+                    echo "✅ COMPLETE installation succeeded"; \
+                else \
+                    echo "❌ All installation attempts failed"; \
+                    echo "Checking error logs for debugging..."; \
+                    ls -la /tmp/OraInstall*/install*.log 2>/dev/null || echo "No installation logs found"; \
+                fi; \
+            fi; \
+        fi; \
+    fi && \
+    echo "" && \
+    echo "=== FINAL INSTALLATION CHECK ===" && \
+    ls -la $ORACLE_HOME/ && \
+    echo "=== SEARCHING FOR FORMS COMPONENTS ===" && \
+    ls -la $ORACLE_HOME/bin/ 2>/dev/null | grep -E "(frm|rep)" || echo "No Forms binaries found" && \
+    echo "=== SEARCHING FOR FORMS DIRECTORIES ===" && \
+    ls -la $ORACLE_HOME/ | grep -iE "(form|report)" || echo "No Forms/Reports directories found"
+
+# Switch back to root for domain creation and final checks
 USER root
+
+# Run comprehensive Forms installation check
+RUN chmod +x /scripts/checkFormsInstallation.sh && \
+    /scripts/checkFormsInstallation.sh
 
 # Final DEBUG before WLST
 RUN echo "ORACLE_HOME is: $ORACLE_HOME" && \
