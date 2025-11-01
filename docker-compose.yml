@@ -1,59 +1,6 @@
 version: '3.8'
 
 services:
-  # Init container to populate host directories
-  oracle-forms-init:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: oracle-forms-14c:latest
-    container_name: oracle-forms-init
-    command: >
-      bash -c "
-        echo '🔧 Initializing host directories with Oracle configuration files...'
-
-        # Copy TNS Admin files
-        echo '📋 Copying TNS configuration...'
-        cp -r /u01/app/oracle/product/fmw14.1.2.0/network/admin/. /host_volumes/tns_admin/ 2>/dev/null || true
-
-        # Copy Reports config files
-        echo '📊 Copying Reports configuration...'
-        cp -r /u01/app/oracle/product/fmw14.1.2.0/reports/conf/. /host_volumes/reports_config/ 2>/dev/null || true
-
-        # Copy domain if not exists
-        echo '🏗️ Checking domain configuration...'
-        if [ ! -d '/host_volumes/oracle_domain_data/forms_domain' ]; then
-          echo 'Creating initial domain structure...'
-          mkdir -p /host_volumes/oracle_domain_data
-        fi
-
-        # Create directory structure
-        echo '📁 Creating directory structure...'
-        mkdir -p /host_volumes/forms_source
-        mkdir -p /host_volumes/reports_source
-        mkdir -p /host_volumes/applications/forms
-        mkdir -p /host_volumes/applications/reports
-        mkdir -p /host_volumes/applications/resources
-        mkdir -p /host_volumes/oracle_logs
-
-        # Set permissions
-        echo '🔐 Setting permissions...'
-        chmod -R 755 /host_volumes/tns_admin 2>/dev/null || true
-        chmod -R 755 /host_volumes/reports_config 2>/dev/null || true
-
-        echo '✅ Host directories initialized successfully!'
-      "
-    volumes:
-      - ./tns_admin:/host_volumes/tns_admin
-      - ./reports_config:/host_volumes/reports_config
-      - ./oracle_domain_data:/host_volumes/oracle_domain_data
-      - ./forms_source:/host_volumes/forms_source
-      - ./reports_source:/host_volumes/reports_source
-      - ./applications:/host_volumes/applications
-      - ./oracle_logs:/host_volumes/oracle_logs
-    profiles:
-      - init
-
   oracle-forms:
     build:
       context: .
@@ -65,9 +12,12 @@ services:
     ports:
       - "7001:7001"   # WebLogic Admin Server & Hosted Console
       - "9001:9001"   # Forms Server
-      - "9002:9002"   # Reports Server
+      - "9002:9012"   # Reports Server
+      - "7777:7777"   # Oracle HTTP Server (OHS)
+      - "8888:8888"   # Reports Web Gateway (backup)
       - "5556:5556"   # Additional WebLogic port
       - "5557:5557"   # Additional WebLogic port
+      - "5901:5901"   # VNC Server for GUI access
 
     environment:
       # Oracle environment variables
@@ -86,25 +36,34 @@ services:
       - JAVA_OPTIONS=-Xmx2048m -Xms1024m
 
     volumes:
-      # Persist WebLogic domain data
-      - ./oracle_domain_data:/u01/app/oracle/config/domains
-      # Persist logs
-      - ./oracle_logs:/u01/app/oracle/product/fmw14.1.2.0/logs
-      # TNS Admin for database connections (tnsnames.ora, etc.)
+      # Persist WebLogic domain data (using named volume for proper permissions)
+      # NOTE: Domain will be created manually via config.sh, so we mount the parent directory
+      - oracle_domain_data:/u01/app/oracle/config/domains
+      # Persist WebLogic user_projects (applications created by config.sh)
+      - oracle_user_projects:/u01/app/oracle/product/fmw14.1.2.0/user_projects
+      # Persist logs (using named volume)
+      - oracle_logs:/u01/app/oracle/product/fmw14.1.2.0/logs
+      # TNS Admin for database connections (LOCAL BIND MOUNT for easy editing)
       - ./tns_admin:/u01/app/oracle/product/fmw14.1.2.0/network/admin
-      # Mount Forms source files for compilation
+      # Mount Forms source files for compilation (LOCAL BIND MOUNT for development)
       - ./forms_source:/u01/app/oracle/forms_source
-      # Mount Reports configuration and templates
-      - ./reports_config:/u01/app/oracle/product/fmw14.1.2.0/reports/conf
-      # Mount Reports source files (.rdf)
+      # Mount Reports configuration and templates (using named volume)
+      - oracle_reports_config:/u01/app/oracle/product/fmw14.1.2.0/reports/conf
+      # Mount Reports source files (.rdf) (LOCAL BIND MOUNT for development)
       - ./reports_source:/u01/app/oracle/reports_source
-      # Mount compiled applications for deployment
-      - ./applications:/u01/app/oracle/config/domains/forms_domain/autodeploy
+      # Mount compiled applications for deployment (using named volume)
+      - oracle_applications:/u01/app/oracle/applications
 
     restart: unless-stopped
 
+    networks:
+      - default
+
+    depends_on:
+      - oracle-db
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7001/console", "||", "exit", "1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:7001/console || exit 1"]
       interval: 60s
       timeout: 30s
       retries: 3
@@ -132,8 +91,8 @@ services:
     image: nginx:alpine
     container_name: oracle-forms-proxy
     ports:
-      - "80:80"
-      - "443:443"
+      - "8880:80"
+      - "8443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       # - ./ssl:/etc/nginx/ssl:ro  # Uncomment for SSL certificates
@@ -143,10 +102,38 @@ services:
     profiles:
       - proxy  # Use 'docker-compose --profile proxy up' to include this service
 
+  # Oracle Database 19c for RCU schemas (certified for FMW 14c)
+  oracle-db:
+    image: gvenzl/oracle-free:23-slim
+    container_name: oracle-db
+    hostname: oracle-db
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PASSWORD=Oracle123
+      - APP_USER=rcu_user
+      - APP_USER_PASSWORD=Oracle123
+    volumes:
+      - oracle_db_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    shm_size: 1gb
+
 volumes:
   oracle_domain_data:
     driver: local
+  oracle_user_projects:
+    driver: local
   oracle_logs:
+    driver: local
+  oracle_reports_config:
+    driver: local
+  oracle_applications:
+    driver: local
+  oracle_db_data:
     driver: local
 
 networks:

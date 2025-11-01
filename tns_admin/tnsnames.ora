@@ -1,0 +1,49 @@
+# Oracle TNS Names Configuration
+# Edit this file to add your database connections
+
+# Example: Oracle Database 23c Free (included in docker-compose)
+FREEPDB1 =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = oracle-db)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = FREEPDB1)
+    )
+  )
+
+TOS19 =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 46.137.238.154)(PORT = 1522))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = tos19.ap-southeast-1.compute.internal)
+    )
+  )
+
+TOS19PDB =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST =46.137.238.154)(PORT = 1522))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = tos19pdb.ap-southeast-1.compute.internal)
+    )
+  )
+
+BNCTDEV =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = dev.1eagledb.bnct-id.com)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = ORCLPDB1)
+    )
+  )  
+
+# Example: External Oracle Database
+# MYDB =
+#   (DESCRIPTION =
+#     (ADDRESS = (PROTOCOL = TCP)(HOST = your-db-host)(PORT = 1521))
+#     (CONNECT_DATA =
+#       (SERVER = DEDICATED)
+#       (SERVICE_NAME = your-service-name)
+#     )
+#   )

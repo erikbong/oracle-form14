@@ -21,8 +21,19 @@ RUN microdnf install -y oraclelinux-developer-release-el8 && \
         gzip \
         unzip \
         which \
-        hostname && \
-    microdnf clean all
+        hostname \
+        motif \
+        motif-devel \
+        libXext \
+        libXtst \
+        python39 \
+        python39-pip \
+        yum && \
+    microdnf clean all && \
+    yum install -y tigervnc-server xterm xorg-x11-fonts-misc && \
+    yum clean all && \
+    python3.9 -m pip install --upgrade pip && \
+    pip3.9 install flask
 
 # Set paths
 ENV ORACLE_JDK_HOME=/u01/app/oracle/product/jdk17
@@ -216,30 +227,37 @@ RUN echo "=== CHECKING ACTUAL ORACLE_HOME STRUCTURE ===" && \
 RUN mkdir -p /u01/app/oracle/config/domains && \
     chown -R oracle:oinstall /u01/app/oracle/config
 
-# Find and execute WLST to create domain
-RUN echo "=== EXECUTING WLST TO CREATE DOMAIN ===" && \
-    if [ -f "$ORACLE_HOME/oracle_common/common/bin/wlst.sh" ]; then \
-        echo "Using oracle_common wlst.sh" && \
-        $ORACLE_HOME/oracle_common/common/bin/wlst.sh /scripts/createDomain.py && \
-        echo "=== DOMAIN CREATION COMPLETED ===" && \
-        echo "Verifying domain was created:" && \
-        ls -la /u01/app/oracle/config/domains/ && \
-        if [ -d "/u01/app/oracle/config/domains/forms_domain" ]; then \
-            echo "SUCCESS: forms_domain directory found" && \
-            ls -la /u01/app/oracle/config/domains/forms_domain/; \
-        else \
-            echo "ERROR: forms_domain directory not found" && \
-            exit 1; \
-        fi; \
-    else \
-        echo "ERROR: No wlst.sh found" && \
-        exit 1; \
-    fi && \
-    chown -R oracle:oinstall /u01/app/oracle/config
+# Domain will be created manually using config.sh via VNC
+# No automatic domain creation during Docker build
 
-# Expose ports
-EXPOSE $ADMIN_PORT $FORMS_PORT $REPORTS_PORT 5556 5557
+# Copy Reports web gateway
+COPY reports_web_gateway.py /scripts/reports_web_gateway.py
+RUN chmod +x /scripts/reports_web_gateway.py
+
+# Copy Reports domain configuration script (for reference, not used during build)
+COPY scripts/configureReportsDomain.py /scripts/configureReportsDomain.py
+RUN chmod +x /scripts/configureReportsDomain.py
+
+# Domain extension will be done via config.sh wizard after VNC connection
+
+# Configure VNC for oracle user
+USER oracle
+RUN mkdir -p /home/oracle/.vnc && \
+    echo "Oracle123" | vncpasswd -f > /home/oracle/.vnc/passwd && \
+    chmod 600 /home/oracle/.vnc/passwd && \
+    echo '#!/bin/sh' > /home/oracle/.vnc/xstartup && \
+    echo 'unset SESSION_MANAGER' >> /home/oracle/.vnc/xstartup && \
+    echo 'unset DBUS_SESSION_BUS_ADDRESS' >> /home/oracle/.vnc/xstartup && \
+    echo 'export ORACLE_HOME=/u01/app/oracle/product/fmw14.1.2.0' >> /home/oracle/.vnc/xstartup && \
+    echo 'export JAVA_HOME=/u01/app/oracle/product/jdk17' >> /home/oracle/.vnc/xstartup && \
+    echo 'export PATH=$ORACLE_HOME/oracle_common/common/bin:$JAVA_HOME/bin:$PATH' >> /home/oracle/.vnc/xstartup && \
+    echo 'xrdb $HOME/.Xresources 2>/dev/null || true' >> /home/oracle/.vnc/xstartup && \
+    echo 'xsetroot -solid grey 2>/dev/null || true' >> /home/oracle/.vnc/xstartup && \
+    echo 'xterm -geometry 100x30+10+10 -ls -title "Oracle Terminal" &' >> /home/oracle/.vnc/xstartup && \
+    chmod +x /home/oracle/.vnc/xstartup
+
+# Expose ports (including VNC 5901)
+EXPOSE $ADMIN_PORT $FORMS_PORT $REPORTS_PORT 5556 5557 8888 5901
 
 # Start all servers as oracle user
-USER oracle
 CMD ["/scripts/startAll.sh"]

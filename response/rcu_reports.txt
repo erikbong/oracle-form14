@@ -1,0 +1,22 @@
+# RCU Response File for Oracle Reports 14c
+# Database connection details
+DB_TYPE=ORACLE
+DB_CONNECT_STRING=46.137.238.154:1522/tos19pdb.ap-southeast-1.compute.internal
+DB_USER=bictsimpb
+DB_PWD=bictsimpb1
+
+# Schema prefix
+SCHEMA_PREFIX=FRDEV
+
+# Schema password (will be used for all schemas)
+SCHEMA_PASSWORD=Oracle123
+
+# Components to install
+# STB = Service Table (required)
+# OPSS = Oracle Platform Security Services (required for Reports)
+# IAU = Audit Services (optional but recommended)
+# MDS = Metadata Services (required for Reports)
+COMPONENTS=STB,OPSS,IAU,MDS,WLS
+
+# Use existing tablespaces
+USE_EXISTING_TABLESPACE=false
