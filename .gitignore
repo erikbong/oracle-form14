@@ -7,10 +7,13 @@ install/jdk-17.0.12_linux-x64_bin.tar.gz
 forms_source/*.fmx
 forms_source/*.mmx
 forms_source/*.plx
+Oracle/
+db_data/
 
 # Compiled Reports files
 reports_source/*.rep
 reports_source/*.jsp
+reports_temp/
 
 # Temporary files
 *.log

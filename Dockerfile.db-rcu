@@ -1,0 +1,37 @@
+# Oracle Database 23c Free with RCU Schemas Pre-installed
+# Based on gvenzl/oracle-free:23-slim with RCU schemas baked in
+# For Oracle Forms & Reports 14c
+
+FROM gvenzl/oracle-free:23-slim
+
+# Metadata
+LABEL maintainer="bbquerre"
+LABEL description="Oracle Database 23c Free with RCU schemas for Oracle Forms & Reports 14c"
+LABEL version="23.5.0-rcu"
+LABEL rcu.schemas="STB,OPSS,IAU,IAU_VIEWER,IAU_APPEND,MDS"
+LABEL app.user="rcu_user"
+
+# Copy the RCU database data into the image
+COPY db_data/rcu_data.tar.gz /tmp/rcu_data.tar.gz
+
+# Extract the data to the Oracle data directory
+# This will be the default data when no volume is mounted
+RUN cd /opt/oracle/oradata && \
+    tar xzf /tmp/rcu_data.tar.gz && \
+    chown -R oracle:oinstall /opt/oracle/oradata && \
+    rm -f /tmp/rcu_data.tar.gz || true
+
+# Environment variables
+ENV ORACLE_PASSWORD=Oracle123 \
+    APP_USER=rcu_user \
+    APP_USER_PASSWORD=Oracle123
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=5 --start-period=60s \
+  CMD healthcheck.sh
+
+# Expose Oracle port
+EXPOSE 1521
+
+# Start database with the baked-in RCU data
+CMD ["container-entrypoint.sh"]

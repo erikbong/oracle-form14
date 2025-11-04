@@ -1,18 +1,37 @@
 version: '3.8'
 
 services:
-  # Oracle Forms & Reports 14c - Main Service
+  # Oracle Database 19c for RCU schemas (certified for FMW 14c)
+  oracle-db:
+    image: gvenzl/oracle-free:23-slim
+    container_name: oracle-db-production
+    hostname: oracle-db
+    ports:
+      - "${DB_PORT:-1521}:1521"
+    environment:
+      - ORACLE_PASSWORD=${DB_PASSWORD:-Oracle123}
+      - APP_USER=${DB_APP_USER:-rcu_user}
+      - APP_USER_PASSWORD=${DB_APP_PASSWORD:-Oracle123}
+    volumes:
+      - oracle_db_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    shm_size: ${DB_SHM_SIZE:-1gb}
+    restart: unless-stopped
+    networks:
+      - oracle-forms-network
+
+  # Oracle Forms & Reports 14c - Production Image with baked-in installation
   oracle-forms:
-    # Build configuration (commented out - using existing local image)
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-
-    # Use local image OR Docker Hub image (uncomment one):
-    image: oracle-forms-14c:latest                    # Local image
-    # image: bbquerre/oracle-forms-14c:latest         # Docker Hub image
-
-    container_name: oracle-forms-14c
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    image: oracle-forms-14c-production:latest
+    container_name: oracle-forms-production
     hostname: oracle-forms
 
     # Port mappings
@@ -24,53 +43,33 @@ services:
       - "${WLS_PORT1:-5556}:5556"          # WebLogic additional ports
       - "${WLS_PORT2:-5557}:5557"
 
-    # Volume mappings
+    # Volume mappings - Config files are externally mounted for customization
     volumes:
-      # OPTIONAL: Mount Oracle directory from host (for development/override)
-      # Uncomment this line if you want to use host Oracle folder instead of baked-in version
-      # NOTE: Currently required because image doesn't have Oracle baked in yet
-      - ./Oracle:/u01/app/oracle/middleware:rw
-
-      # Installation files (read-only) - for manual installation if needed
-      - ./install:/install:ro
-
-      # Entrypoint script
-      - ./entrypoint.sh:/entrypoint.sh:ro
-
-      # Forms FMB files (read-write)
+      # Forms configuration and source files
+      - ./config/forms:/u01/app/oracle/middleware/config/forms:rw
       - ./forms_source:/home/oracle/forms_source:rw
 
-      # Reports RDF files (read-write)
+      # Reports configuration and source files
+      - ./config/reports:/u01/app/oracle/middleware/config/reports:rw
       - ./reports_source:/home/oracle/reports_source:rw
-
-      # Reports temporary files (read-write)
       - ./reports_temp:/home/oracle/reports_temp:rw
 
-      # Configuration files (external)
-      - ./config/forms:/u01/app/oracle/middleware/config/forms:rw
-      - ./config/reports:/u01/app/oracle/middleware/config/reports:rw
+      # TNS names for database connections
       - ./config/tnsnames:/u01/app/oracle/middleware/config/tnsnames:rw
 
-      # Logs directory
+      # Domain logs (optional, for troubleshooting)
       - ./logs:/u01/app/oracle/middleware/logs:rw
-
-      # Scripts and utilities (read-only)
-      - ./scripts:/scripts:ro
 
     # Environment variables
     environment:
       - DISPLAY=:1
       - VNC_RESOLUTION=${VNC_RESOLUTION:-1280x1024}
       - VNC_PASSWORD=${VNC_PASSWORD:-Oracle123}
-
-      # Oracle paths
       - ORACLE_BASE=/u01/app/oracle
       - ORACLE_HOME=/u01/app/oracle/middleware/fmw
       - JAVA_HOME=/u01/app/oracle/middleware/jdk17
       - MW_HOME=/u01/app/oracle/middleware
       - DOMAIN_HOME=/u01/app/oracle/middleware/fmw/user_projects/domains/base_domain
-
-      # Auto-start configuration
       - AUTO_START_SERVICES=${AUTO_START_SERVICES:-true}
 
       # WebLogic credentials
@@ -84,11 +83,8 @@ services:
       - DB_USERNAME=${DB_APP_USER:-rcu_user}
       - DB_PASSWORD=${DB_APP_PASSWORD:-Oracle123}
 
-    # Run as root (entrypoint will switch to oracle user)
-    user: root
-
     # Use custom entrypoint for auto-start functionality
-    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    user: root
 
     # Shared memory for Oracle (required)
     shm_size: ${SHM_SIZE:-2gb}
@@ -106,11 +102,11 @@ services:
       oracle-db:
         condition: service_healthy
 
-    # Health check - checks both VNC and WebLogic
+    # Health check
     healthcheck:
-      test: ["CMD-SHELL", "vncserver -list && curl -f http://localhost:7001/console || exit 1"]
-      interval: 60s
-      timeout: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:7001/console"]
+      interval: 30s
+      timeout: 10s
       retries: 3
       start_period: 5m
 
@@ -125,41 +121,26 @@ services:
     labels:
       com.oracle.forms.version: "14.1.2.0"
       com.oracle.forms.type: "production"
-      com.oracle.forms.description: "Oracle Forms & Reports 14c with auto-start"
+      com.oracle.forms.description: "Production-ready Oracle Forms & Reports with auto-start"
 
     networks:
       - oracle-forms-network
 
-  # Oracle Database 23c Free with RCU schemas pre-installed
-  oracle-db:
-    image: bbquerre/oracle-db-with-rcu:latest
-    container_name: oracle-db
-    hostname: oracle-db
-
+  # Optional: Nginx reverse proxy for better external access
+  nginx:
+    image: nginx:alpine
+    container_name: oracle-forms-proxy
     ports:
-      - "${DB_PORT:-1521}:1521"
-
-    environment:
-      - ORACLE_PASSWORD=${DB_PASSWORD:-Oracle123}
-      - APP_USER=${DB_APP_USER:-rcu_user}
-      - APP_USER_PASSWORD=${DB_APP_PASSWORD:-Oracle123}
-
-    # NOTE: No volume needed - RCU data is baked into the image!
-    # Uncomment below if you want to persist data changes:
-    # volumes:
-    #   - oracle_db_data:/opt/oracle/oradata
-
-    healthcheck:
-      test: ["CMD", "healthcheck.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-    shm_size: ${DB_SHM_SIZE:-1gb}
-
+      - "${PROXY_HTTP_PORT:-8880}:80"
+      - "${PROXY_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./ssl:/etc/nginx/ssl:ro  # Uncomment for SSL certificates
+    depends_on:
+      - oracle-forms
     restart: unless-stopped
-
+    profiles:
+      - proxy  # Use 'docker-compose -f docker-compose.production.yml --profile proxy up' to include
     networks:
       - oracle-forms-network
 

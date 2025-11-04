@@ -1,6 +1,6 @@
-# Oracle Forms & Reports 14c - Production Image
+# Oracle Forms & Reports 14c - Production Ready Image
 # This Dockerfile bakes the complete Oracle installation into the image
-# Based on successful manual installation
+# Based on the working manual installation
 
 FROM oraclelinux:8-slim
 
@@ -63,8 +63,8 @@ RUN echo '#!/bin/sh' > /home/oracle/.vnc/xstartup && \
 # This assumes ./Oracle contains the working installation
 COPY --chown=oracle:oinstall ./Oracle /u01/app/oracle/middleware
 
-# Copy entrypoint script (from docs/deployment)
-COPY --chown=root:root docs/deployment/entrypoint.sh /entrypoint.sh
+# Copy entrypoint script
+COPY --chown=root:root entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Make scripts executable

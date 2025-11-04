@@ -6,194 +6,313 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a Docker-based Oracle Forms & Reports 14c deployment project. The repository contains everything needed to build and run Oracle Forms and Reports 14c in a containerized environment using Oracle Linux 8.
+This is a Docker-based Oracle Forms & Reports 14c deployment project with Oracle Database 23c Free. The repository contains everything needed to run Oracle Forms and Reports 14c in a containerized environment using Docker Hub images.
 
 **Repository**: https://github.com/erikbong/oracle-form14.git
+**Docker Hub**:
+- Forms & Reports: https://hub.docker.com/r/bbquerre/oracle-forms-14c
+- Database with RCU: https://hub.docker.com/r/bbquerre/oracle-db-with-rcu
 
 ## Documentation Structure
 
+**IMPORTANT: All documentation files (*.md) MUST be created in the `/docs/` folder, with the following exceptions:**
+- **README.md** - Main project documentation (root level only)
+- **CLAUDE.md** - This file - Technical guidance for Claude Code (root level only)
+
+### Root Level Files
 - **[README.md](README.md)**: Complete user guide with quick start, deployment options, troubleshooting
 - **[CLAUDE.md](CLAUDE.md)**: This file - Technical guidance for Claude Code development
+- **[.env](.env)**: Active environment configuration
 - **[.env.example](.env.example)**: Environment configuration template
-- **[docker-compose.yml](docker-compose.yml)**: Complete deployment configuration
-- **[nginx.conf](nginx.conf)**: Reverse proxy configuration
+- **[docker-compose.yml](docker-compose.yml)**: Main deployment configuration (merged setup)
+- **[entrypoint.sh](entrypoint.sh)**: Auto-start script for containers
 
-## Architecture
+### Documentation Folder Structure
+All other documentation must be organized in `/docs/`:
+- **docs/deployment/** - Deployment guides, production setup, Docker Hub instructions
+- **docs/configuration/** - WebLogic, Forms, Reports configuration guides
+- **docs/development/** - Development guides, Forms/Reports development documentation
+- **docs/COMPLETE_INSTALLATION_GUIDE.md** - Comprehensive installation guide
+- **docs/MERGED_SETUP.md** - Setup summary and merge documentation
+- **docs/TROUBLESHOOTING.md** - Troubleshooting guide
 
-- **Base Image**: Oracle Linux 8 Slim
-- **Oracle FMW Version**: 14.1.2.0 (Fusion Middleware Infrastructure + Forms & Reports)
-- **Java Version**: Oracle JDK 17 (primary) with OpenJDK 11 fallback
-- **WebLogic Domain**: `forms_domain` with AdminServer and managed servers
+## Current Architecture
+
+### Base Setup
+- **Forms Image**: Oracle Linux 8 Slim + XFCE Desktop + VNC + WebLogic environment
+- **Database Image**: Oracle 23c Free + RCU schemas pre-installed
+- **Oracle FMW Version**: 14.1.2.0 (Forms & Reports)
+- **Java Version**: Oracle JDK 17
+- **WebLogic Domain**: `base_domain` with AdminServer and managed servers
 
 ### Key Components
 
-1. **Infrastructure Layer**: WebLogic Server + Java Required Files (JRF)
-2. **Forms Server**: Managed server on port 9001
-3. **Reports Server**: Managed server on port 9002
-4. **Admin Server**: WebLogic admin console on port 7001
+1. **Oracle Forms & Reports Container** (`oracle-forms-14c`)
+   - VNC Server on port 5901 (XFCE desktop)
+   - AdminServer (WebLogic) on port 7001
+   - WLS_FORMS managed server on port 9001
+   - WLS_REPORTS managed server on port 9012 (mapped to 9002 on host)
+   - NodeManager for server management
+   - Auto-start capability via entrypoint.sh
+
+2. **Oracle Database Container** (`oracle-db`)
+   - Oracle 23c Free Database on port 1521
+   - RCU Schemas pre-installed: STB, OPSS, IAU, IAU_VIEWER, IAU_APPEND, MDS
+   - App User: rcu_user / Oracle123
+   - Database data baked into image (no volume needed)
 
 ### Directory Structure
 
-- `/install/` - Oracle installer binaries (FMW Infrastructure, Forms & Reports, JDK)
-- `/scripts/` - Shell scripts and WLST domain creation scripts
-- `/response/` - Silent installation response files
-- `Dockerfile` - Multi-stage container build definition
+```
+oracle_form_14c/
+├── .env                      # Active environment config
+├── .env.example              # Template
+├── docker-compose.yml        # Main compose (merged & active)
+├── Dockerfile               # Forms Dockerfile (for future with Oracle baked in)
+├── Dockerfile.db-rcu        # Database Dockerfile (includes RCU data)
+├── entrypoint.sh            # Auto-start script
+├── Oracle/                  # (gitignored) Oracle Forms & Reports installation
+│   ├── jdk17/              # Oracle JDK 17
+│   └── fmw/                # Forms & Reports installation
+├── db_data/                 # (gitignored) RCU export for building DB image
+├── install/                 # Oracle installer files
+├── forms_source/            # Your .fmb files
+├── reports_source/          # Your .rdf files
+├── scripts/                 # Utility scripts
+├── docs/                    # All documentation
+└── README.md               # Main user documentation
+```
 
-## Container Build and Deployment
+## Deployment Methods
 
-### Using Docker Compose (Recommended)
+### Method 1: Local Images with Oracle Mounted (Current Active)
 
-Build and start the complete stack:
+**Use case**: Development, testing, when you have Oracle installation locally
+
 ```bash
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# View logs
+docker logs -f oracle-forms-14c
+```
+
+**Requirements**:
+- `./Oracle/` folder with complete Oracle Forms & Reports installation
+- `entrypoint.sh` in project root
+- Local image: `oracle-forms-14c:latest`
+
+**How it works**:
+- Oracle folder is mounted from host: `./Oracle:/u01/app/oracle/middleware:rw`
+- Database uses Docker Hub image with RCU pre-installed
+- Services auto-start via entrypoint.sh
+
+### Method 2: Docker Hub Images (For Others)
+
+**Use case**: Production, sharing with team, clean deployment
+
+```bash
+# Pull images from Docker Hub
+docker pull bbquerre/oracle-forms-14c:latest
+docker pull bbquerre/oracle-db-with-rcu:latest
+
+# Update docker-compose.yml to use Docker Hub images
+# Change line 12: image: bbquerre/oracle-forms-14c:latest
+
+# Start services
 docker-compose up -d
 ```
 
-Build and start with nginx reverse proxy:
-```bash
-docker-compose --profile proxy up -d
-```
-
-Stop the services:
-```bash
-docker-compose down
-```
-
-Stop and remove volumes (⚠️ this will delete persisted data):
-```bash
-docker-compose down -v
-```
-
-### Using Docker Directly
-
-Build the container:
-```bash
-docker build -t oracle-forms-14c .
-```
-
-Run the container:
-```bash
-docker run -d -p 7001:7001 -p 9001:9001 -p 9002:9002 oracle-forms-14c
-```
-
-**Important Notes**:
-- The build requires Oracle installation files in the `install/` directory and takes 10-15 minutes
-- Container startup takes 2-3 minutes to initialize all services
-- Default admin credentials: `weblogic/Oracle123` (change in production)
-
-### Port Mapping
-- **7001**: WebLogic Admin Server (console at http://localhost:7001/console)
-- **9001**: Forms Server
-- **9002**: Reports Server
-- **5556/5557**: Additional WebLogic ports
-- **80** (with proxy): Nginx reverse proxy with path-based routing
-
-### Service Access
-
-**Direct Access:**
-- WebLogic Console: http://localhost:7001/console
-- Forms Service: http://localhost:9001
-- Reports Service: http://localhost:9002
-
-**With Nginx Proxy (using --profile proxy):**
-- Admin Console: http://admin.localhost or http://localhost/console
-- Forms: http://forms.localhost or http://localhost/forms
-- Reports: http://reports.localhost or http://localhost/reports
-
-### Docker Compose Features
-
-- **Persistent Data**: Domain data and logs are stored in Docker volumes
-- **Health Checks**: Automatic health monitoring with WebLogic console endpoint
-- **Resource Limits**: Memory and CPU limits configured for stability
-- **Restart Policy**: Automatic restart unless manually stopped
-- **Logging**: Structured logging with rotation
-- **Optional Proxy**: Nginx reverse proxy with profile-based activation
-
-## Key Scripts
-
-### `/scripts/startAll.sh`
-Main container startup script that:
-1. Starts NodeManager in background
-2. Starts AdminServer (WebLogic)
-3. Starts Forms and Reports managed servers
-4. Tails AdminServer logs to keep container alive
-
-### `/scripts/createDomain.py`
-WLST (WebLogic Scripting Tool) script that creates the WebLogic domain with:
-- AdminServer on port 7001
-- forms_server1 managed server on port 9001
-- reports_server1 managed server on port 9002
-- Default credentials: weblogic/Oracle123
-
-## Installation Files Required
-
-Place these files in the `/install/` directory before building:
-- `fmw_14.1.2.0.0_infrastructure.jar` - WebLogic + JRF infrastructure
-- `fmw_14.1.2.0.0_fr_linux64.bin` - Forms & Reports binaries
-- `jdk-17.0.12_linux-x64_bin.tar.gz` - Oracle JDK 17
+**Note**: Docker Hub oracle-forms image still requires `./Oracle/` folder mounted
 
 ## Environment Variables
 
-- `ORACLE_HOME`: `/u01/app/oracle/product/fmw14.1.2.0`
-- `DOMAIN_HOME`: `/u01/app/oracle/config/domains/forms_domain`
-- `ORACLE_JDK_HOME`: `/u01/app/oracle/product/jdk17`
-- `JAVA_HOME`: Points to Oracle JDK 17
-- Port variables: `ADMIN_PORT`, `FORMS_PORT`, `REPORTS_PORT`
+Current paths (defined in `.env` and docker-compose.yml):
 
-## Docker Compose Configuration
+```bash
+# Oracle paths
+ORACLE_BASE=/u01/app/oracle
+ORACLE_HOME=/u01/app/oracle/middleware/fmw
+JAVA_HOME=/u01/app/oracle/middleware/jdk17
+MW_HOME=/u01/app/oracle/middleware
+DOMAIN_HOME=/u01/app/oracle/middleware/fmw/user_projects/domains/base_domain
 
-The `docker-compose.yml` file provides a complete deployment configuration with:
+# Port configuration
+VNC_PORT=5901
+ADMIN_PORT=7001
+FORMS_PORT=9001
+REPORTS_PORT=9002      # Maps to container port 9012
+WLS_PORT1=5556
+WLS_PORT2=5557
+DB_PORT=1521
 
-### Services
-- **oracle-forms**: Main Oracle Forms & Reports container
-- **nginx** (optional): Reverse proxy for better external access
+# Resource limits
+MEM_LIMIT=12g
+MEM_RESERVATION=8g
+CPUS=4
+SHM_SIZE=2gb
 
-### Volumes
-- `oracle_domain_data`: Persists WebLogic domain configuration
-- `oracle_logs`: Persists application and server logs
+# Database configuration
+DB_PASSWORD=Oracle123
+DB_APP_USER=rcu_user
+DB_APP_PASSWORD=Oracle123
+DB_SERVICE=FREEPDB1
 
-### Configuration Options
-```yaml
-# Override default settings by creating docker-compose.override.yml
-version: '3.8'
-services:
-  oracle-forms:
-    environment:
-      - ADMIN_PASSWORD=YourSecurePassword
-      - JAVA_OPTIONS=-Xmx4096m -Xms2048m
-    ports:
-      - "8001:7001"  # Change external port
+# WebLogic credentials
+WLS_USER=weblogic
+WLS_PW=Oracle123
+
+# Docker Hub username
+DOCKERHUB_USERNAME=bbquerre
+```
+
+## Port Mapping
+
+| Service | Container Port | Host Port | Purpose |
+|---------|---------------|-----------|---------|
+| VNC | 5901 | 5901 | Remote desktop access |
+| WebLogic Admin | 7001 | 7001 | Admin Console |
+| Forms Server | 9001 | 9001 | Forms application |
+| Reports Server | 9012 | 9002 | Reports application |
+| Oracle DB | 1521 | 1521 | Database connection |
+| WebLogic | 5556, 5557 | 5556, 5557 | Additional WLS ports |
+
+## Service Access
+
+**VNC Access**:
+```
+vnc://localhost:5901
+Password: Oracle123
+```
+
+**Web Services**:
+- WebLogic Console: http://localhost:7001/console
+- Enterprise Manager: http://localhost:7001/em
+- Forms: http://localhost:9001/forms/frmservlet
+- Reports: http://localhost:9002/reports/rwservlet
+
+**Database Connection**:
+```
+Host: localhost
+Port: 1521
+Service: FREEPDB1
+User: rcu_user
+Password: Oracle123
+```
+
+**Credentials**:
+- WebLogic: `weblogic / Oracle123`
+- Database SYS: `Oracle123` (as sysdba)
+- Database App: `rcu_user / Oracle123`
+- VNC: `Oracle123`
+
+## Auto-Start System
+
+The `entrypoint.sh` script handles automatic service startup:
+
+1. Starts VNC server as oracle user
+2. Checks `AUTO_START_SERVICES` environment variable
+3. If enabled, executes `startAllServices.sh`:
+   - Starts NodeManager
+   - Starts AdminServer (WebLogic)
+   - Waits 30 seconds
+   - Starts WLS_FORMS managed server
+   - Starts WLS_REPORTS managed server
+4. Tails logs to keep container alive
+
+**Startup time**: 5-8 minutes for complete initialization
+
+## Docker Images
+
+### oracle-forms-14c:latest (5.03 GB)
+- Oracle Linux 8 + XFCE + VNC
+- WebLogic environment configured
+- **Requires**: ./Oracle folder mounted at runtime
+- **Contains**: OS, desktop, WebLogic setup
+
+### bbquerre/oracle-db-with-rcu:latest (1.5 GB compressed, 7.6 GB extracted)
+- Oracle 23c Free Database
+- **Includes**: RCU schemas baked in (STB, OPSS, IAU, IAU_VIEWER, IAU_APPEND, MDS)
+- **Self-contained**: No volume needed
+- Ready for immediate use
+
+## Development Workflow
+
+### Making Changes to Oracle Configuration
+
+1. Services are running with `./Oracle` mounted
+2. Make changes to files in `./Oracle/` on host
+3. Changes are immediately available in container
+4. Restart services if needed:
+   ```bash
+   docker exec oracle-forms-14c sh -c "su - oracle -c 'stopAllServices.sh && startAllServices.sh'"
+   ```
+
+### Building Custom Database Image
+
+If you modify the database and want to create a new image:
+
+```bash
+# Export current database volume
+mkdir -p db_data
+docker run --rm -v oracle_form_14c_oracle_db_data:/source \
+  -v $(pwd)/db_data:/backup alpine \
+  sh -c "cd /source && tar czf /backup/rcu_data.tar.gz ."
+
+# Build new image
+docker build -f Dockerfile.db-rcu -t bbquerre/oracle-db-with-rcu:latest .
+
+# Push to Docker Hub
+docker push bbquerre/oracle-db-with-rcu:latest
 ```
 
 ## User Management
 
-- **Oracle user** (uid: 54321, gid: 54321): Runs Oracle services
-- **oinstall group**: Oracle installation group
-- Container switches between root and oracle user during build phases
+- **oracle** user (uid: 54321, gid: 54321): Runs all Oracle services
+- **oinstall** group (gid: 54321): Oracle installation group
+- **dba** group (gid: 54322): Database administration group
+- Container runs as root, switches to oracle for services
 
-## Development Notes
+## Known Limitations
 
-- The Dockerfile includes extensive debugging output for troubleshooting installation issues
-- All scripts are made executable during build
-- Silent installation is used with response files for unattended deployment
-- Domain creation happens during container build, not runtime
+1. **Oracle Folder Not Baked In**: The oracle-forms image cannot bake the `./Oracle` folder due to symlink issues with `Oracle/fmw/lib/cobsqlintf.o` during Docker build. Current workaround: mount the folder at runtime.
+
+2. **No Nginx**: Nginx reverse proxy was removed from the setup. All services accessed directly via ports.
+
+3. **Database Volume**: While RCU data is baked into the image, any runtime changes to the database are lost when container restarts (unless you uncomment the volume mount in docker-compose.yml).
 
 ## Troubleshooting
 
-### Common Issues and Solutions
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for detailed troubleshooting steps.
 
-1. **Missing `gzip` package**: Ensure `gzip` is included in the package installation list (already fixed in current Dockerfile)
+### Quick Checks
 
-2. **Oracle installation fails**: Check that the correct installation parameters are used:
-   - Use `-ignoreSysPrereqs` (not `-ignorePrereq`)
-   - Ensure response files have correct ORACLE_HOME paths
+```bash
+# Check container status
+docker-compose ps
 
-3. **Domain creation fails**: Verify WLST script syntax and ensure proper navigation between configuration sections
+# View logs
+docker logs -f oracle-forms-14c
+docker logs -f oracle-db
 
-4. **Container startup fails**: Check that domain permissions are correctly set for the oracle user
+# Check running processes
+docker exec oracle-forms-14c ps aux | grep java
 
-### Build Issues Fixed
+# Check AdminServer status
+docker exec oracle-forms-14c curl -s http://localhost:7001/console
 
-- Added missing `gzip` package for JDK extraction
-- Corrected Oracle installer parameter from `-ignorePrereq` to `-ignoreSysPrereqs`
-- Fixed WLST domain creation script to properly navigate configuration tree
-- Added domain directory creation and permission management
+# Restart services
+docker-compose restart oracle-forms-14c
+```
+
+## Important Notes for Claude
+
+- Always create new `.md` files in `/docs/` folder (except README.md and CLAUDE.md)
+- Current setup uses Oracle folder mounted from host
+- Database image has RCU baked in - no volume needed
+- Default domain name is `base_domain` (not `forms_domain`)
+- Services take 5-8 minutes to fully start
+- Never remove `.gitignore` entries for `Oracle/` and `db_data/`

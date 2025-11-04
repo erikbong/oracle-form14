@@ -35,7 +35,12 @@
       "Bash(oracle-forms-14c:latest )",
       "Bash(bash -c \"vncserver :1 -geometry 1280x1024 -depth 24 && tail -f /dev/null\")",
       "Bash(docker start:*)",
-      "Bash(docker inspect:*)"
+      "Bash(docker inspect:*)",
+      "Bash(docker tag:*)",
+      "Bash(docker network rm:*)",
+      "Bash(docker login:*)",
+      "Bash(docker images:*)",
+      "Bash(docker history:*)"
     ],
     "deny": [],
     "ask": []

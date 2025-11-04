@@ -1,0 +1,32 @@
+# TNS Names Configuration for Oracle Forms & Reports
+# This file defines database connection strings
+
+# Oracle DB Container (included in docker-compose.production.yml)
+FREEPDB1 =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = oracle-db)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = FREEPDB1)
+    )
+  )
+
+# Alternative: Using localhost (from host machine)
+FREEPDB1_LOCAL =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = FREEPDB1)
+    )
+  )
+
+# Example: External Oracle Database
+# PRODUCTION_DB =
+#   (DESCRIPTION =
+#     (ADDRESS = (PROTOCOL = TCP)(HOST = your-db-server.example.com)(PORT = 1521))
+#     (CONNECT_DATA =
+#       (SERVER = DEDICATED)
+#       (SERVICE_NAME = ORCL)
+#     )
+#   )
