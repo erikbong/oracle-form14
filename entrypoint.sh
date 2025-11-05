@@ -3,6 +3,11 @@ set -e
 
 echo "Starting Oracle Forms & Reports 14c container..."
 
+# Clean up VNC lock files from previous runs
+echo "Cleaning up VNC lock files..."
+rm -f /tmp/.X*-lock /tmp/.X11-unix/X* 2>/dev/null || true
+su - oracle -c "rm -f /home/oracle/.vnc/*.pid /home/oracle/.vnc/*.log 2>/dev/null || true"
+
 # Start VNC as oracle user
 echo "Starting VNC server..."
 su - oracle -c "vncserver :1 -geometry 1280x1024 -depth 24 -localhost no"

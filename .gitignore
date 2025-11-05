@@ -20,3 +20,4 @@ reports_temp/
 *.tmp
 .DS_Store
 Thumbs.db
+Oracle_backup.tar.gz
