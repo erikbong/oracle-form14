@@ -9,7 +9,7 @@ services:
     #   dockerfile: Dockerfile
 
     # Use local image OR Docker Hub image (uncomment one):
-    image: oracle-forms-14c:latest                    # Local image
+    image: bbquerre/oracle-forms-14c:latest                    # Local image
     # image: bbquerre/oracle-forms-14c:latest         # Docker Hub image
 
     container_name: oracle-forms-14c
