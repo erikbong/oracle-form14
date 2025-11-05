@@ -40,7 +40,11 @@
       "Bash(docker network rm:*)",
       "Bash(docker login:*)",
       "Bash(docker images:*)",
-      "Bash(docker history:*)"
+      "Bash(docker history:*)",
+      "Bash(docker port:*)",
+      "Bash(timeout 10 curl -s \"http://54.255.51.164:19002/reports/rwservlet?dbttl&report=BATCH-TEMPORARY.rdf&desformat=pdf&destype=cache\")",
+      "Bash(timeout 15 curl:*)",
+      "Bash(ssh ubuntu@54.255.51.164 \"docker exec oracle-forms-14c bash -c \"\"ps aux | grep WLS_REPORTS | grep -v grep\"\"\")"
     ],
     "deny": [],
     "ask": []
